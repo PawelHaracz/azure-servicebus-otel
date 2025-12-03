@@ -17,6 +17,14 @@ var builder = WebApplication.CreateBuilder(args);
 // Configuration
 // =============================================================================
 
+// Explicitly configure all configuration sources
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
+
 builder.Services.Configure<ServiceBusSettings>(
     builder.Configuration.GetSection(ServiceBusSettings.SectionName));
 

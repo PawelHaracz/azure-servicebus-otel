@@ -1,6 +1,6 @@
 # Azure Service Bus with OpenTelemetry Demo
 
-A .NET 9 Web API demonstrating end-to-end distributed tracing with Azure Service Bus and OpenTelemetry, exporting telemetry to Azure Application Insights.
+A .NET 9 Web API demonstrating end-to-end distributed tracing with Azure Service Bus and OpenTelemetry, exporting telemetry to multiple destinations: Azure Application Insights, Jaeger, and Prometheus.
 
 ## Architecture
 
@@ -10,29 +10,54 @@ A .NET 9 Web API demonstrating end-to-end distributed tracing with Azure Service
 │   Request   │────►│   Queue      │────►│   Processor         │────►│   Queue              │────►│   Processor             │
 │             │     │              │     │                     │     │                      │     │                         │
 └─────────────┘     └──────────────┘     └─────────────────────┘     └──────────────────────┘     └─────────────────────────┘
-                                                                                                              │
-                                                                                                              ▼
-                                                                                               ┌─────────────────────────┐
-                                                                                               │   Order Completed       │
-                                                                                               │   (End-to-End Trace)    │
-                                                                                               └─────────────────────────┘
 ```
 
 ## Features
 
 - **End-to-End Distributed Tracing**: Full trace propagation across HTTP requests and Service Bus queues
+- **Multi-Destination Telemetry**: Export to Azure Application Insights, Jaeger, and Prometheus
 - **Custom Metrics**: Message counts, processing duration, order values, and latency measurements
 - **Structured Logging**: Rich contextual logging with correlation IDs
 - **Queue Auto-Creation**: Automatically creates required queues on startup
-- **Azure Application Insights Integration**: All telemetry exported to Application Insights
+- **Docker Support**: Full Docker Compose setup with Jaeger and Prometheus
 
 ## Prerequisites
 
 - .NET 9 SDK
-- Azure Subscription with:
-  - Azure Service Bus namespace
-  - Azure Application Insights resource
-- Azure CLI (for authentication)
+- Azure Service Bus namespace with connection string
+- (Optional) Azure Application Insights resource
+- (Optional) Docker and Docker Compose for local observability stack
+
+## Quick Start
+
+### Option 1: Run Locally
+
+```bash
+cd src/AzureServiceBusOtel.Api
+dotnet run
+```
+
+### Option 2: Run with Docker (Jaeger + Prometheus)
+
+1. Create `.env` file in project root:
+```bash
+SERVICEBUS_CONNECTION_STRING=Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=YOUR_KEY
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=your-key;IngestionEndpoint=https://your-region.in.applicationinsights.azure.com/
+```
+
+2. Start all services:
+```bash
+docker-compose up -d --build
+```
+
+3. Access services:
+
+| Service | URL |
+|---------|-----|
+| API | http://localhost:5050 |
+| Jaeger UI | http://localhost:16686 |
+| Prometheus | http://localhost:9090 |
+| Metrics | http://localhost:5050/metrics |
 
 ## Configuration
 
@@ -41,49 +66,30 @@ A .NET 9 Web API demonstrating end-to-end distributed tracing with Azure Service
 ```json
 {
   "ServiceBus": {
-    "FullyQualifiedNamespace": "your-namespace.servicebus.windows.net",
+    "ConnectionString": "Endpoint=sb://your-namespace.servicebus.windows.net/;...",
     "OrdersQueueName": "orders-queue",
     "OrderProcessedQueueName": "order-processed-queue",
     "MaxConcurrentCalls": 5
   },
   "ApplicationInsights": {
-    "ConnectionString": "InstrumentationKey=your-key;IngestionEndpoint=https://your-region.in.applicationinsights.azure.com/"
+    "ConnectionString": "InstrumentationKey=your-key;..."
+  },
+  "OpenTelemetry": {
+    "OtlpEndpoint": "http://localhost:4317",
+    "EnableAzureMonitor": true,
+    "EnableOtlp": true,
+    "EnablePrometheus": true
   }
 }
 ```
 
-### Environment Variables (Alternative)
+### Environment Variables
 
 ```bash
-export ServiceBus__FullyQualifiedNamespace="your-namespace.servicebus.windows.net"
+export ServiceBus__ConnectionString="Endpoint=sb://..."
 export ApplicationInsights__ConnectionString="InstrumentationKey=..."
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 ```
-
-## Authentication
-
-The application uses `DefaultAzureCredential` for passwordless authentication. Ensure you have one of these configured:
-
-1. **Azure CLI**: `az login`
-2. **Visual Studio/VS Code**: Sign in with your Azure account
-3. **Managed Identity**: When running in Azure
-
-### Required RBAC Roles
-
-Assign these roles to your identity on the Service Bus namespace:
-- `Azure Service Bus Data Sender`
-- `Azure Service Bus Data Receiver`
-- `Azure Service Bus Data Owner` (for queue management)
-
-## Running the Application
-
-```bash
-cd src/AzureServiceBusOtel.Api
-dotnet run
-```
-
-The API will be available at:
-- HTTP: http://localhost:5000
-- HTTPS: https://localhost:5001
 
 ## API Endpoints
 
@@ -111,18 +117,25 @@ Response:
 
 ### Health Check
 ```http
-GET /api/orders/health
+GET /health
 ```
 
+### Prometheus Metrics
 ```http
-GET /health
+GET /metrics
 ```
 
 ## Telemetry
 
-### Traces (Spans)
+### Telemetry Destinations
 
-The following operations create spans:
+| Signal | Azure App Insights | Jaeger | Prometheus |
+|--------|-------------------|--------|------------|
+| Traces | ✅ | ✅ (OTLP) | ❌ |
+| Metrics | ✅ | ❌ | ✅ (scrape) |
+| Logs | ✅ | ✅ (OTLP) | ❌ |
+
+### Traces (Spans)
 
 | Operation | Kind | Description |
 |-----------|------|-------------|
@@ -154,57 +167,92 @@ All logs include:
 - `QueueName` - Service Bus queue name
 - `MessageId` - Service Bus message ID
 
-## Application Insights Queries
+## Observability Queries
 
-### View End-to-End Transactions
+### Application Insights (Kusto)
+
 ```kusto
+// View End-to-End Transactions
 traces
 | where customDimensions.CorrelationId != ""
 | project timestamp, message, customDimensions.CorrelationId, customDimensions.OrderId
 | order by timestamp asc
-```
 
-### View Processing Duration
-```kusto
+// View Processing Duration
 customMetrics
 | where name == "servicebus.message.processing.duration"
 | summarize avg(value), percentile(value, 95), max(value) by bin(timestamp, 1m)
 | render timechart
 ```
 
-### View Order Flow
-```kusto
-dependencies
-| where target contains "servicebus"
-| summarize count() by target, resultCode
+### Prometheus (PromQL)
+
+```promql
+# Messages sent per queue
+servicebus_messages_sent_total
+
+# 95th percentile processing duration
+histogram_quantile(0.95, rate(servicebus_message_processing_duration_bucket[5m]))
+
+# Orders created rate
+rate(orders_created_total[5m])
 ```
 
 ## Project Structure
 
 ```
-src/AzureServiceBusOtel.Api/
-├── Configuration/
-│   └── ServiceBusSettings.cs          # Configuration model
-├── Controllers/
-│   └── OrdersController.cs            # API endpoints
-├── Models/
-│   ├── Order.cs                       # Order DTOs
-│   ├── OrderProcessed.cs              # Processed order model
-│   └── OrderCompleted.cs              # Completed order model
-├── Processors/
-│   ├── OrderQueueProcessor.cs         # Processes orders queue
-│   └── OrderCompletedProcessor.cs     # Processes completed orders
-├── Services/
-│   ├── QueueManager.cs                # Queue creation/management
-│   ├── QueueInitializerHostedService.cs # Startup queue init
-│   └── ServiceBusService.cs           # Message sending
-├── Telemetry/
-│   └── TelemetryConstants.cs          # Metrics & tracing setup
-├── Program.cs                         # Application startup
-└── appsettings.json                   # Configuration
+├── docker-compose.yml                    # Docker orchestration
+├── prometheus/
+│   └── prometheus.yml                    # Prometheus config
+├── docs/
+│   ├── correlation-propagation.md        # Trace propagation docs
+│   └── docker-setup.md                   # Docker setup guide
+└── src/AzureServiceBusOtel.Api/
+    ├── Configuration/
+    │   └── ServiceBusSettings.cs         # Configuration model
+    ├── Controllers/
+    │   └── OrdersController.cs           # API endpoints
+    ├── Models/
+    │   ├── Order.cs                      # Order DTOs
+    │   ├── OrderProcessed.cs             # Processed order model
+    │   └── OrderCompleted.cs             # Completed order model
+    ├── Processors/
+    │   ├── OrderQueueProcessor.cs        # Processes orders queue
+    │   └── OrderCompletedProcessor.cs    # Processes completed orders
+    ├── Services/
+    │   ├── QueueManager.cs               # Queue creation/management
+    │   ├── QueueInitializerHostedService.cs
+    │   └── ServiceBusService.cs          # Message sending
+    ├── Telemetry/
+    │   └── TelemetryConstants.cs         # Metrics & tracing setup
+    ├── Dockerfile                        # Container build
+    ├── Program.cs                        # Application startup
+    ├── appsettings.json                  # Base configuration
+    ├── appsettings.Development.json      # Dev configuration
+    └── appsettings.Docker.json           # Docker configuration
 ```
+
+## Docker Commands
+
+```bash
+# Start all services
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f api
+
+# Stop all services
+docker-compose down
+
+# Clean up volumes
+docker-compose down -v
+```
+
+## Documentation
+
+- [Correlation ID Propagation](docs/correlation-propagation.md) - How trace context is propagated
+- [Docker Setup](docs/docker-setup.md) - Full Docker environment guide
 
 ## License
 
 MIT
-

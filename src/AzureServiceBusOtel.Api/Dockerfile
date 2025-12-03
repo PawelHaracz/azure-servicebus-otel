@@ -19,10 +19,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 # Set environment variables
-ENV ASPNETCORE_URLS=http://+:5000
+ENV ASPNETCORE_URLS=http://+:5050
 ENV ASPNETCORE_ENVIRONMENT=Docker
 
-EXPOSE 5000
+EXPOSE 5050
 
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "AzureServiceBusOtel.Api.dll"]

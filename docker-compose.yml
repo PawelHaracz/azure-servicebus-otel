@@ -10,12 +10,12 @@ services:
       dockerfile: Dockerfile
     container_name: servicebus-otel-api
     ports:
-      - "5000:5000"
+      - "5050:5050"
+    env_file:
+      - .env
     environment:
       - ASPNETCORE_ENVIRONMENT=Docker
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - ServiceBus__ConnectionString=${SERVICEBUS_CONNECTION_STRING}
-      - ApplicationInsights__ConnectionString=${APPLICATIONINSIGHTS_CONNECTION_STRING}
     depends_on:
       - jaeger
     networks:

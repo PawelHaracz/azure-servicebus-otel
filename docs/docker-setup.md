@@ -17,7 +17,7 @@ This document explains how to run the application with Jaeger for distributed tr
 │  │  Application │     /metrics       ┌──────────────┐                       │
 │  │   (.NET 9)   │ ◄───────────────── │  Prometheus  │  :9090 (UI)           │
 │  │              │     (scrape)       │              │                       │
-│  │   :5000      │                    └──────────────┘                       │
+│  │   :5050      │                    └──────────────┘                       │
 │  │              │                                                            │
 │  │              │     OTLP           ┌──────────────┐                       │
 │  │              │ ─────────────────► │    Azure     │  (cloud)              │
@@ -56,18 +56,18 @@ docker-compose up -d
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| API | http://localhost:5000 | Application API |
+| API | http://localhost:5050 | Application API |
 | Jaeger UI | http://localhost:16686 | View distributed traces |
 | Prometheus | http://localhost:9090 | View and query metrics |
-| Metrics Endpoint | http://localhost:5000/metrics | Raw Prometheus metrics |
-| Health Check | http://localhost:5000/health | Application health |
+| Metrics Endpoint | http://localhost:5050/metrics | Raw Prometheus metrics |
+| Health Check | http://localhost:5050/health | Application health |
 
 ## Testing the Flow
 
 ### Create an Order
 
 ```bash
-curl -X POST http://localhost:5000/api/orders \
+curl -X POST http://localhost:5050/api/orders \
   -H "Content-Type: application/json" \
   -d '{
     "productName": "Widget Pro",
@@ -164,7 +164,7 @@ docker-compose down -v
 
 ### No metrics in Prometheus
 
-1. Check if metrics endpoint is accessible: `curl http://localhost:5000/metrics`
+1. Check if metrics endpoint is accessible: `curl http://localhost:5050/metrics`
 2. Verify Prometheus can reach the API: `docker-compose logs prometheus`
 3. Check Prometheus targets: http://localhost:9090/targets
 

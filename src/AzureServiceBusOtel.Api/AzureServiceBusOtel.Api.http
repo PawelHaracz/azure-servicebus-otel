@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:5000
+@baseUrl = http://localhost:5050
 
 ### Create a new order
 POST {{baseUrl}}/api/orders
