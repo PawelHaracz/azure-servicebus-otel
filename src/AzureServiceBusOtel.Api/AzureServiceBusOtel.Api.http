@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:5000
+
+### Create a new order
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "productName": "Widget Pro",
+  "quantity": 5,
+  "unitPrice": 29.99,
+  "customerEmail": "customer@example.com"
+}
+
+### Create another order (Electronics)
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "productName": "Premium Headphones",
+  "quantity": 2,
+  "unitPrice": 199.99,
+  "customerEmail": "john.doe@example.com"
+}
+
+### Create bulk order
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+
+{
+  "productName": "Office Supplies Pack",
+  "quantity": 100,
+  "unitPrice": 15.50,
+  "customerEmail": "procurement@company.com"
+}
+
+### Health check (controller endpoint)
+GET {{baseUrl}}/api/orders/health
+
+### Health check (app health endpoint)
+GET {{baseUrl}}/health
